@@ -1,7 +1,62 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import { MapPin, Wallet, Sparkles, Calendar, Users, Wand2, Compass, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
+// ─── Particle System ────────────────────────────────────────────────────────
+function Particles() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
+      {Array.from({ length: 18 }).map((_, i) => (
+        <div
+          key={i}
+          className="particle"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDuration: `${8 + Math.random() * 12}s`,
+            animationDelay: `${Math.random() * 10}s`,
+            width: `${2 + Math.random() * 4}px`,
+            height: `${2 + Math.random() * 4}px`,
+            background: i % 3 === 0
+              ? 'rgba(245,197,24,0.7)'
+              : i % 3 === 1
+              ? 'rgba(168,85,247,0.6)'
+              : 'rgba(59,130,246,0.5)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const MOODS = [
+  { value: 'relax',     emoji: '🏖️',  label: 'Relax'     },
+  { value: 'adventure', emoji: '🧗',   label: 'Adventure' },
+  { value: 'romantic',  emoji: '🍷',   label: 'Romantic'  },
+  { value: 'cultural',  emoji: '🏛️',  label: 'Culture'   },
+  { value: 'party',     emoji: '🪩',   label: 'Party'     },
+];
+
+const TRAVEL_TYPES = [
+  { value: 'solo',    emoji: '🧘',  label: 'Solo'    },
+  { value: 'couple',  emoji: '👫',  label: 'Couple'  },
+  { value: 'friends', emoji: '👯',  label: 'Friends' },
+  { value: 'family',  emoji: '👨‍👩‍👧', label: 'Family'  },
+];
+
+const BUDGETS = [
+  { value: 'low',     emoji: '🎒',  label: 'Budget',  sub: 'Backpacking' },
+  { value: 'medium',  emoji: '✈️',  label: 'Comfort', sub: 'Mid-range'   },
+  { value: 'luxury',  emoji: '👑',  label: 'Luxury',  sub: 'Premium'     },
+];
+
+// ─── Animation Variants ──────────────────────────────────────────────────────
+const fadeUp    = { hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0 } };
+const fadeLeft  = { hidden: { opacity: 0, x: -30 }, show: { opacity: 1, x: 0 } };
+const fadeRight = { hidden: { opacity: 0, x: 30 },  show: { opacity: 1, x: 0 } };
+const stagger   = { show: { transition: { staggerChildren: 0.1 } } };
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [formData, setFormData] = useState({
     destination: '',
@@ -11,44 +66,32 @@ export default function Home() {
     travelType: 'solo',
     hiddenGems: false,
   });
-
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-
-  // Small fix to avoid hydration mismatch with lucide icons if needed, 
-  // but lucide-react mostly works fine. We will ensure components are mounted.
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState('');
   const [mounted, setMounted] = useState(false);
+  const resultRef = useRef(null);
+
   useEffect(() => { setMounted(true); }, []);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
+  const handleField = (name, value) =>
+    setFormData(p => ({ ...p, [name]: value }));
 
   const generateTrip = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setResult(null);
-
     try {
-      const response = await fetch('/api/generate', {
+      const res  = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate itinerary');
-      }
-
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
       setResult(data);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -59,248 +102,523 @@ export default function Home() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <>
       <Head>
-        <title>AI Holiday Planner</title>
-        <meta name="description" content="Generate personalized travel itineraries with AI" />
+        <title>Wanderlust AI — Your Dream Trip Awaits</title>
+        <meta name="description" content="AI-powered travel planner. Get personalized itineraries tailored to your mood, budget and travel style." />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
       </Head>
 
-      <main className="max-w-5xl mx-auto">
-        <div className="text-center mb-10 mt-6">
-          <div className="flex justify-center mb-4 text-purple-600">
-            <Compass size={48} strokeWidth={1.5} />
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 tracking-tight">
-            AI Travel Companion
-          </h1>
-          <p className="mt-3 text-lg text-gray-500 max-w-2xl mx-auto">
-            Discover magical destinations tailored precisely to your mood, budget, and travel style. Let's create an unforgettable journey.
-          </p>
-        </div>
+      {/* ── Background ── */}
+      <div className="stars-bg" />
+      <div className="orb orb-1" />
+      <div className="orb orb-2" />
+      <div className="orb orb-3" />
+      <Particles />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* LEFT COLUMN: Input Form */}
-          <div className="lg:col-span-5">
-            <div className="glass-card p-6 md:p-8">
-              <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center">
-                <Wand2 className="mr-2 text-indigo-500" /> Plan Your Trip
+      {/* ── Content ── */}
+      <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh' }}>
+
+        {/* ── NAV ── */}
+        <motion.nav
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.05)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>✈️</span>
+            <span style={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.02em' }}>
+              Wanderlust<span className="grad-gold">AI</span>
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', alignItems: 'center' }}>
+            <span style={{
+              background: 'rgba(16,185,129,0.15)',
+              color: '#10b981',
+              border: '1px solid rgba(16,185,129,0.3)',
+              borderRadius: 999,
+              padding: '4px 12px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}>● Live AI</span>
+          </div>
+        </motion.nav>
+
+        {/* ── HERO ── */}
+        <motion.section
+          initial="hidden" animate="show" variants={stagger}
+          style={{ textAlign: 'center', padding: '60px 24px 40px' }}
+        >
+          <motion.div variants={fadeUp} className="hero-float" style={{ marginBottom: 24 }}>
+            <span style={{
+              display: 'inline-block',
+              background: 'rgba(245,197,24,0.1)',
+              border: '1px solid rgba(245,197,24,0.3)',
+              borderRadius: 999,
+              padding: '6px 20px',
+              fontSize: '0.8rem',
+              color: '#f5c518',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}>✨ Powered by Groq AI</span>
+          </motion.div>
+
+          <motion.h1
+            variants={fadeUp}
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+              fontWeight: 700,
+              lineHeight: 1.1,
+              marginBottom: 20,
+            }}
+          >
+            Your Dream Trip,<br />
+            <span className="grad-text">Crafted by AI</span>
+          </motion.h1>
+
+          <motion.p
+            variants={fadeUp}
+            style={{
+              color: 'rgba(255,255,255,0.5)',
+              fontSize: '1.1rem',
+              maxWidth: 520,
+              margin: '0 auto 48px',
+              lineHeight: 1.7,
+            }}
+          >
+            Tell us your vibe. We'll build you a personalized, day-by-day itinerary with hidden gems and budget insights.
+          </motion.p>
+        </motion.section>
+
+        {/* ── MAIN CONTENT ── */}
+        <div style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          padding: '0 24px 80px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 32,
+          alignItems: 'start',
+        }}
+          className="main-grid"
+        >
+
+          {/* ─── FORM ─── */}
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+          >
+            <form onSubmit={generateTrip} className="glass" style={{ padding: 32 }}>
+
+              <h2 style={{ fontWeight: 700, fontSize: '1.3rem', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>🗺️</span> Plan Your Journey
               </h2>
 
-              <form onSubmit={generateTrip} className="space-y-5">
-                {/* Destination */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                    <MapPin size={16} className="mr-1 text-gray-400"/> Destination
-                  </label>
-                  <input
-                    type="text"
-                    name="destination"
-                    required
-                    placeholder="e.g. Kyoto, Bali, or 'Anywhere'"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all shadow-sm"
-                    value={formData.destination}
-                    onChange={handleChange}
-                  />
-                </div>
+              {/* Destination */}
+              <div style={{ marginBottom: 22 }}>
+                <div className="section-label">Where to?</div>
+                <input
+                  type="text"
+                  className="input-dark"
+                  placeholder="Paris, Bali, Tokyo… or surprise me!"
+                  required
+                  value={formData.destination}
+                  onChange={e => handleField('destination', e.target.value)}
+                />
+              </div>
 
-                {/* Days */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                    <Calendar size={16} className="mr-1 text-gray-400"/> Number of Days
-                  </label>
-                  <input
-                    type="number"
-                    name="days"
-                    min="1"
-                    max="14"
-                    required
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all shadow-sm"
-                    value={formData.days}
-                    onChange={handleChange}
-                  />
+              {/* Days */}
+              <div style={{ marginBottom: 22 }}>
+                <div className="section-label">Duration (days)</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <button
+                    type="button"
+                    onClick={() => handleField('days', Math.max(1, formData.days - 1))}
+                    style={{
+                      width: 40, height: 40, borderRadius: 10,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#fff', fontSize: '1.3rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >−</button>
+                  <span style={{ fontSize: '2rem', fontWeight: 800, minWidth: 32, textAlign: 'center', color: '#f5c518' }}>
+                    {formData.days}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleField('days', Math.min(14, formData.days + 1))}
+                    style={{
+                      width: 40, height: 40, borderRadius: 10,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#fff', fontSize: '1.3rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >+</button>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }}>1–14 days</span>
                 </div>
+              </div>
 
-                {/* Budget */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                    <Wallet size={16} className="mr-1 text-gray-400"/> Budget Level
-                  </label>
-                  <select
-                    name="budget"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 outline-none bg-white shadow-sm"
-                    value={formData.budget}
-                    onChange={handleChange}
-                  >
-                    <option value="low">Low / Backpacking</option>
-                    <option value="medium">Medium / Comfort</option>
-                    <option value="luxury">Luxury / Premium</option>
-                  </select>
+              {/* Mood */}
+              <div style={{ marginBottom: 22 }}>
+                <div className="section-label">Your Vibe</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {MOODS.map(m => (
+                    <div
+                      key={m.value}
+                      className={`mood-pill ${formData.mood === m.value ? 'active' : ''}`}
+                      onClick={() => handleField('mood', m.value)}
+                    >
+                      {m.emoji} {m.label}
+                    </div>
+                  ))}
                 </div>
+              </div>
 
-                {/* Travel Type */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                    <Users size={16} className="mr-1 text-gray-400"/> Whose traveling?
-                  </label>
-                  <select
-                    name="travelType"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 outline-none bg-white shadow-sm"
-                    value={formData.travelType}
-                    onChange={handleChange}
-                  >
-                    <option value="solo">Solo Healing</option>
-                    <option value="couple">Couple / Romantic</option>
-                    <option value="friends">Friends Group</option>
-                    <option value="family">Family Gathering</option>
-                  </select>
+              {/* Travel Type */}
+              <div style={{ marginBottom: 22 }}>
+                <div className="section-label">Traveling As</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {TRAVEL_TYPES.map(t => (
+                    <div
+                      key={t.value}
+                      className={`mood-pill ${formData.travelType === t.value ? 'active' : ''}`}
+                      onClick={() => handleField('travelType', t.value)}
+                    >
+                      {t.emoji} {t.label}
+                    </div>
+                  ))}
                 </div>
+              </div>
 
-                {/* Mood */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                    <Sparkles size={16} className="mr-1 text-gray-400"/> Vibe & Mood
-                  </label>
-                  <select
-                    name="mood"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 outline-none bg-white shadow-sm"
-                    value={formData.mood}
-                    onChange={handleChange}
-                  >
-                    <option value="relax">Relax & Unwind 🏖️</option>
-                    <option value="adventure">Thrilling Adventure 🧗‍♂️</option>
-                    <option value="romantic">Romantic Escape 🍷</option>
-                    <option value="party">Nightlife & Party 🪩</option>
-                    <option value="cultural">Culture & History 🏛️</option>
-                  </select>
+              {/* Budget */}
+              <div style={{ marginBottom: 22 }}>
+                <div className="section-label">Budget Style</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  {BUDGETS.map(b => (
+                    <div
+                      key={b.value}
+                      onClick={() => handleField('budget', b.value)}
+                      style={{
+                        background: formData.budget === b.value
+                          ? 'linear-gradient(135deg, rgba(245,197,24,0.2), rgba(255,149,0,0.1))'
+                          : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${formData.budget === b.value ? 'rgba(245,197,24,0.6)' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 14,
+                        padding: '14px 10px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: formData.budget === b.value ? '0 0 20px rgba(245,197,24,0.15)' : 'none',
+                      }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{b.emoji}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: formData.budget === b.value ? '#f5c518' : '#fff' }}>{b.label}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)' }}>{b.sub}</div>
+                    </div>
+                  ))}
                 </div>
+              </div>
 
-                {/* Hidden Gems Toggle */}
-                <div className="flex items-center pt-2">
-                  <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                    <input 
-                      type="checkbox" 
-                      name="hiddenGems" 
-                      id="toggle" 
-                      className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer focus:outline-none transition-transform duration-200 ease-in-out checked:bg-indigo-500 checked:translate-x-5 checked:border-indigo-500"
-                      checked={formData.hiddenGems}
-                      onChange={handleChange}
-                    />
-                    <label htmlFor="toggle" className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-                  </div>
-                  <label htmlFor="toggle" className="text-sm text-gray-700 font-medium cursor-pointer">
-                    Avoid tourist traps (Find Hidden Gems)
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-bold shadow-lg transform transition active:scale-95 disabled:opacity-70 flex justify-center items-center"
+              {/* Hidden Gems Toggle */}
+              <div style={{ marginBottom: 28 }}>
+                <div
+                  className="toggle-wrap"
+                  onClick={() => handleField('hiddenGems', !formData.hiddenGems)}
                 >
-                  {loading ? (
-                    <span className="animate-pulse">Crafting your itinerary...</span>
-                  ) : (
-                    <>Generate Trip <Sparkles size={18} className="ml-2" /></>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN: Output Dashboard */}
-          <div className="lg:col-span-7">
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 mb-6 font-medium">
-                <strong>Error:</strong> {error}
-              </div>
-            )}
-
-            {!result && !loading && !error && (
-              <div className="h-full glass-card border-dashed border-2 border-gray-300 flex flex-col items-center justify-center p-10 text-gray-400 min-h-[400px]">
-                <Compass size={64} className="mb-4 opacity-50" />
-                <p className="text-lg">Your itinerary will magically appear here.</p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="h-full glass-card flex flex-col items-center justify-center p-10 min-h-[400px] animate-pulse">
-                <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full mb-4 animate-[spin_1s_linear_infinite]"></div>
-                <p className="text-indigo-600 font-semibold text-lg">Consulting local experts & AI logic...</p>
-              </div>
-            )}
-
-            {result && !loading && (
-              <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
-                {/* Story Card */}
-                <div className="glass-card p-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
-                  <h3 className="text-xl font-bold mb-3 text-indigo-50 flex items-center">
-                    <Sparkles className="mr-2" size={20} /> The Vibe
-                  </h3>
-                  <p className="leading-relaxed text-lg text-indigo-50 font-medium italic">
-                    "{result.story}"
-                  </p>
-                </div>
-
-                {/* Budget Card */}
-                <div className="glass-card p-6 border-l-4 border-l-green-400">
-                  <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center">
-                    <Wallet className="mr-2 text-green-500" size={20} /> Budget Breakdown
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-100">
-                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Stay</p>
-                      <p className="font-medium text-gray-800 text-sm">{result.budget.stay}</p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-100">
-                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Food</p>
-                      <p className="font-medium text-gray-800 text-sm">{result.budget.food}</p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-100">
-                      <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Transport</p>
-                      <p className="font-medium text-gray-800 text-sm">{result.budget.transport}</p>
-                    </div>
+                  <div className={`toggle-track ${formData.hiddenGems ? 'on' : ''}`}>
+                    <div className="toggle-thumb" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>💎 Hidden Gems Mode</div>
+                    <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>Skip tourist traps, find local secrets</div>
                   </div>
                 </div>
+              </div>
 
-                {/* Itinerary */}
-                <div className="glass-card p-6">
-                  <h3 className="text-2xl font-bold mb-6 text-gray-800 flex items-center">
-                    <Calendar className="mr-2 text-blue-500" size={24} /> Day-by-Day Plan
-                  </h3>
-                  
-                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 before:to-transparent">
-                    {result.itinerary?.map((item, index) => (
-                      <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-indigo-100 text-indigo-600 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold">
-                          {item.day}
-                        </div>
-                        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-5 rounded-xl border border-gray-100 shadow-md transform transition group-hover:-translate-y-1">
-                          <h4 className="font-bold text-gray-800 mb-2 flex items-center">
-                            <CheckCircle2 size={16} className="text-indigo-500 mr-2"/> Day {item.day}
-                          </h4>
-                          <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-line">
-                            {item.plan}
-                          </p>
-                        </div>
-                      </div>
+              <div className="glow-line" />
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-gold"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+              >
+                {loading ? (
+                  <>
+                    <span style={{
+                      width: 18, height: 18, border: '2px solid rgba(0,0,0,0.3)',
+                      borderTop: '2px solid #000', borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                      display: 'inline-block',
+                    }} />
+                    Crafting your journey...
+                  </>
+                ) : (
+                  <> ✨ Generate My Trip</>
+                )}
+              </button>
+
+            </form>
+          </motion.div>
+
+          {/* ─── OUTPUT ─── */}
+          <div ref={resultRef}>
+            <AnimatePresence mode="wait">
+
+              {/* Empty State */}
+              {!result && !loading && !error && (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="glass"
+                  style={{
+                    padding: 48,
+                    textAlign: 'center',
+                    minHeight: 400,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 16,
+                  }}
+                >
+                  <motion.div
+                    animate={{ rotate: [0, 10, -10, 0], y: [0, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+                    style={{ fontSize: 72 }}
+                  >🌍</motion.div>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '1rem', lineHeight: 1.7 }}>
+                    Fill in your preferences and hit<br />
+                    <strong style={{ color: '#f5c518' }}>Generate My Trip</strong> to begin your adventure
+                  </p>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                    {['🗼', '🏝️', '🗻', '🏜️', '🌊'].map((e, i) => (
+                      <motion.span
+                        key={i}
+                        style={{ fontSize: 24, cursor: 'default' }}
+                        animate={{ y: [0, -6, 0] }}
+                        transition={{ repeat: Infinity, duration: 2, delay: i * 0.3 }}
+                      >{e}</motion.span>
                     ))}
                   </div>
-                </div>
+                </motion.div>
+              )}
 
-              </div>
-            )}
+              {/* Loading State */}
+              {loading && (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="glass"
+                  style={{
+                    padding: 48, textAlign: 'center', minHeight: 400,
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 24,
+                  }}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <div className="spinner" />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 22,
+                    }}>✈️</div>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f5c518', marginBottom: 6 }}>
+                      Consulting AI travel experts...
+                    </p>
+                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem' }}>
+                      Discovering hidden gems just for you
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[0, 1, 2].map(i => (
+                      <motion.div
+                        key={i}
+                        style={{ width: 8, height: 8, borderRadius: '50%', background: '#f5c518' }}
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+                        transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Error State */}
+              {error && !loading && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{
+                    background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: 20,
+                    padding: 28,
+                  }}
+                >
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+                  <div style={{ fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>Generation Failed</div>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>{error}</div>
+                </motion.div>
+              )}
+
+              {/* Results */}
+              {result && !loading && (
+                <motion.div
+                  key="result"
+                  initial="hidden"
+                  animate="show"
+                  variants={stagger}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+                >
+
+                  {/* Story Card */}
+                  <motion.div variants={fadeUp}>
+                    <div className="story-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                        <span style={{ fontSize: 20 }}>✨</span>
+                        <span style={{ fontWeight: 700, color: '#f5c518', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                          Your Trip Story
+                        </span>
+                      </div>
+                      <p style={{
+                        fontFamily: "'Playfair Display', serif",
+                        fontSize: '1.15rem',
+                        lineHeight: 1.8,
+                        color: 'rgba(255,255,255,0.85)',
+                        fontStyle: 'italic',
+                        position: 'relative',
+                        zIndex: 1,
+                      }}>
+                        {result.story}
+                      </p>
+                    </div>
+                  </motion.div>
+
+                  {/* Budget Card */}
+                  <motion.div variants={fadeUp} className="glass" style={{ padding: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <span style={{ fontSize: 20 }}>💰</span>
+                      <span style={{ fontWeight: 700 }}>Budget Breakdown</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      {[
+                        { icon: '🏨', label: 'Stay',      value: result.budget?.stay      },
+                        { icon: '🍜', label: 'Food',      value: result.budget?.food      },
+                        { icon: '🚌', label: 'Transport', value: result.budget?.transport },
+                      ].map(b => (
+                        <div key={b.label} className="budget-pill">
+                          <div style={{ fontSize: 26, marginBottom: 8 }}>{b.icon}</div>
+                          <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>{b.label}</div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.4 }}>{b.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+
+                  {/* Itinerary */}
+                  <motion.div variants={fadeUp} className="glass" style={{ padding: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                      <span style={{ fontSize: 20 }}>📅</span>
+                      <span style={{ fontWeight: 700 }}>Day-by-Day Itinerary</span>
+                      <span style={{
+                        marginLeft: 'auto',
+                        background: 'rgba(245,197,24,0.1)',
+                        border: '1px solid rgba(245,197,24,0.3)',
+                        borderRadius: 999,
+                        padding: '3px 12px',
+                        fontSize: '0.75rem',
+                        color: '#f5c518',
+                        fontWeight: 600,
+                      }}>{result.itinerary?.length} days</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {result.itinerary?.map((item, i) => (
+                        <motion.div
+                          key={i}
+                          variants={fadeUp}
+                          className="day-card"
+                          style={{ display: 'flex', gap: 16 }}
+                        >
+                          <div className="day-number">{item.day}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: '0.9rem', color: 'rgba(255,255,255,0.9)' }}>
+                              Day {item.day}
+                            </div>
+                            <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.85rem', lineHeight: 1.7 }}>
+                              {item.plan}
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+
+                  {/* Reset */}
+                  <motion.button
+                    variants={fadeUp}
+                    onClick={() => setResult(null)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'rgba(255,255,255,0.4)',
+                      borderRadius: 12,
+                      padding: '12px 24px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      transition: 'all 0.3s ease',
+                    }}
+                    whileHover={{ borderColor: 'rgba(245,197,24,0.4)', color: '#f5c518' }}
+                  >
+                    ↩ Plan Another Trip
+                  </motion.button>
+
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
-
         </div>
-      </main>
-      
-      {/* Required for Tailwind toggle switch logic without external libraries */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .toggle-checkbox:checked { right: 0; border-color: #68d391; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #6366f1; }
-        .toggle-checkbox { right: 0; z-index: 1; border-color: #e2e8f0; transition: all 0.3s; }
-      `}} />
-    </div>
+
+        {/* ── FOOTER ── */}
+        <div style={{
+          textAlign: 'center',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          padding: '20px 24px',
+          color: 'rgba(255,255,255,0.2)',
+          fontSize: '0.8rem',
+        }}>
+          WanderlustAI · Powered by Groq LLaMA 3.3 · Built with Next.js
+        </div>
+      </div>
+
+      {/* ── RESPONSIVE ── */}
+      <style>{`
+        @media (max-width: 768px) {
+          .main-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+    </>
   );
 }

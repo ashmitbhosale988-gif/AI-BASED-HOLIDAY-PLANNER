@@ -1,8 +1,8 @@
-import OpenAI from 'openai';
+import Groq from 'groq-sdk';
 
-// Make sure you have OPENAI_API_KEY in your .env.local file
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Groq client using the GROQ_API_KEY from your .env file
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 export default async function handler(req, res) {
@@ -13,59 +13,79 @@ export default async function handler(req, res) {
   const { destination, budget, mood, days, travelType, hiddenGems } = req.body;
 
   if (!destination || !days) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    return res.status(400).json({ error: 'Missing required fields: destination and days are required.' });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI API key is missing. Please add it to .env.local' });
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(500).json({ error: 'GROQ_API_KEY is missing. Please add it to your .env file.' });
   }
 
   try {
     const prompt = `
-      You are an elite, world-class travel planner. I need an itinerary.
-      
-      Details:
-      - Destination: ${destination}
-      - Days: ${days}
-      - Budget: ${budget}
-      - Mood/Vibe: ${mood}
-      - Traveler Type: ${travelType}
-      - Include Hidden Gems (avoid tourist traps?): ${hiddenGems ? 'Yes, heavily focus on hidden local spots instead of extreme tourist spots.' : 'No, regular famous attractions are fine.'}
+You are an elite, world-class travel planner. Generate a personalized trip plan based on these details:
 
-      Generate a personalized trip plan. 
-      You MUST respond ONLY with a raw JSON object matching the exact structure below. Do not include markdown codeblocks, just the JSON.
+- Destination: ${destination}
+- Number of Days: ${days}
+- Budget: ${budget} (low = backpacking, medium = comfort, luxury = premium)
+- Mood/Vibe: ${mood}
+- Traveler Type: ${travelType}
+- Focus on Hidden Gems (avoid tourist traps): ${hiddenGems ? 'YES - heavily prefer off-the-beaten-path, local hidden gems over mainstream tourist spots.' : 'NO - popular attractions are fine.'}
 
-      {
-        "story": "A short, vivid 2-3 sentence description of how this trip will feel based on the mood.",
-        "itinerary": [
-          { "day": 1, "plan": "Morning: ..., Afternoon: ..., Evening: ..." },
-          { "day": 2, "plan": "..." }
-        ],
-        "budget": {
-          "stay": "Estimated cost/type of accommodation (e.g. $50/night for boutique hostels)",
-          "food": "Estimated cost/type of food",
-          "transport": "Best ways to get around and cost"
-        }
-      }
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code blocks. Just the raw JSON.
+
+The JSON must follow this exact structure:
+{
+  "story": "A vivid, emotional 2-3 sentence description of how this trip will feel — describe the atmosphere, senses, and mood.",
+  "itinerary": [
+    { "day": 1, "plan": "Morning: [activity]. Afternoon: [activity]. Evening: [activity]." },
+    { "day": 2, "plan": "Morning: [activity]. Afternoon: [activity]. Evening: [activity]." }
+  ],
+  "budget": {
+    "stay": "Type and estimated cost of accommodation per night (e.g. Cozy guesthouses ~$30-50/night)",
+    "food": "Type and estimated daily food cost (e.g. Street food and local cafes ~$10-20/day)",
+    "transport": "Best transport options and estimated cost (e.g. Metro + tuk-tuks ~$5-10/day)"
+  }
+}
+
+Generate exactly ${days} days in the itinerary array.
     `;
 
-    // Note: We use gpt-4o-mini as requested for speed and cost efficiency
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    // Using llama-3.3-70b-versatile — one of Groq's fastest, most capable free models
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: "system", content: "You are a helpful travel assistant that outputs JSON." },
-        { role: "user", content: prompt }
+        {
+          role: 'system',
+          content: 'You are a professional travel planner. You always respond with valid JSON only. Never include markdown code blocks or any text outside the JSON object.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
       ],
-      response_format: { type: "json_object" }, // Crucial: forces JSON output
+      temperature: 0.7,
+      max_tokens: 2048,
     });
 
-    const aiResponse = completion.choices[0].message.content;
-    const jsonToReturn = JSON.parse(aiResponse);
+    const aiResponse = completion.choices[0].message.content.trim();
+
+    // Clean up any accidental markdown code fences just in case
+    const cleanResponse = aiResponse
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    const jsonToReturn = JSON.parse(cleanResponse);
 
     return res.status(200).json(jsonToReturn);
 
   } catch (error) {
-    console.error('OpenAI Error:', error);
-    return res.status(500).json({ error: 'Failed to generate itinerary. Check API keys or quota.' });
+    console.error('Groq API Error:', error);
+
+    // Return a more descriptive error message to help with debugging
+    return res.status(500).json({
+      error: error?.message || 'Failed to generate itinerary. Please check your GROQ_API_KEY and try again.',
+    });
   }
 }
